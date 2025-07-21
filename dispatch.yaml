@@ -1,0 +1,21 @@
+dispatch:
+  # Route API calls to default service (backend) - MUST come first
+  - url: "forescore.app/api/*"
+    service: default
+    
+  - url: "www.forescore.app/api/*"
+    service: default
+    
+  - url: "forescore.app/health"
+    service: default
+    
+  - url: "www.forescore.app/health"
+    service: default
+    
+  # Route forescore.app to frontend service
+  - url: "forescore.app/*"
+    service: frontend
+    
+  # Route www.forescore.app to frontend service  
+  - url: "www.forescore.app/*"
+    service: frontend

@@ -1,0 +1,18 @@
+runtime: nodejs20
+service: frontend
+
+handlers:
+- url: /static
+  static_dir: build/static
+
+- url: /(.*\.(json|ico|js|css|txt|map|svg|mp3|png))$
+  static_files: build/\1
+  upload: build/.*\.(json|ico|js|css|txt|map|svg|mp3|png)$
+
+- url: /.*
+  static_files: build/index.html
+  upload: build/index.html
+
+automatic_scaling:
+  min_instances: 0
+  max_instances: 5

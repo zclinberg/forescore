@@ -1,19 +1,17 @@
 import json
-import boto3
 from datetime import datetime
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from google.cloud import firestore
 
 app = Flask(__name__)
 CORS(app)
 
-dynamodb = boto3.resource('dynamodb')
-table_name = 'golf-scores'
-
 try:
-    table = dynamodb.Table(table_name)
+    db = firestore.Client()
+    collection_name = 'golf-scores'
 except:
-    table = None
+    db = None
 
 COURSE_INFO = {
     "par": [4, 4, 5, 4, 3, 5, 4, 3, 5, 4, 4, 5, 4, 4, 5, 4, 3, 5],
@@ -48,13 +46,14 @@ def get_default_scores():
     return scores
 
 def get_scores_from_db():
-    if not table:
+    if not db:
         return get_default_scores()
     
     try:
-        response = table.get_item(Key={'id': 'current_tournament'})
-        if 'Item' in response:
-            return response['Item']['scores']
+        doc_ref = db.collection(collection_name).document('current_tournament')
+        doc = doc_ref.get()
+        if doc.exists:
+            return doc.to_dict()['scores']
         else:
             return get_default_scores()
     except Exception as e:
@@ -62,17 +61,15 @@ def get_scores_from_db():
         return get_default_scores()
 
 def save_scores_to_db(scores):
-    if not table:
+    if not db:
         return False
     
     try:
-        table.put_item(
-            Item={
-                'id': 'current_tournament',
-                'scores': scores,
-                'lastUpdated': datetime.now().isoformat()
-            }
-        )
+        doc_ref = db.collection(collection_name).document('current_tournament')
+        doc_ref.set({
+            'scores': scores,
+            'lastUpdated': datetime.now().isoformat()
+        })
         return True
     except Exception as e:
         print(f"Error saving scores to DB: {e}")
@@ -80,6 +77,7 @@ def save_scores_to_db(scores):
 
 @app.route('/api/scores', methods=['GET'])
 def get_scores():
+    return '', 404
     scores = get_scores_from_db()
     return jsonify({
         'scores': scores,
@@ -88,6 +86,7 @@ def get_scores():
 
 @app.route('/api/scores', methods=['PUT'])
 def update_score():
+    return '', 404
     data = request.get_json()
     
     if not data or not all(key in data for key in ['pairingId', 'round', 'holeIndex', 'score']):
@@ -131,60 +130,19 @@ def update_score():
 
 @app.route('/health', methods=['GET'])
 def health_check():
+    return '', 404
     return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
 
-def lambda_handler(event, context):
-    from werkzeug.serving import WSGIRequestHandler
-    from io import StringIO
-    import sys
-    
-    method = event.get('httpMethod', 'GET')
-    path = event.get('path', '/')
-    headers = event.get('headers', {})
-    query_params = event.get('queryStringParameters') or {}
-    body = event.get('body', '')
-    
-    environ = {
-        'REQUEST_METHOD': method,
-        'PATH_INFO': path,
-        'QUERY_STRING': '&'.join([f"{k}={v}" for k, v in query_params.items()]),
-        'CONTENT_TYPE': headers.get('Content-Type', ''),
-        'CONTENT_LENGTH': str(len(body)) if body else '0',
-        'wsgi.input': StringIO(body),
-        'wsgi.errors': sys.stderr,
-        'wsgi.version': (1, 0),
-        'wsgi.multithread': False,
-        'wsgi.multiprocess': True,
-        'wsgi.run_once': False,
-        'wsgi.url_scheme': 'https',
-        'SERVER_NAME': headers.get('Host', 'localhost'),
-        'SERVER_PORT': '443',
-    }
-    
-    for key, value in headers.items():
-        key = key.upper().replace('-', '_')
-        if key not in ('CONTENT_TYPE', 'CONTENT_LENGTH'):
-            key = 'HTTP_' + key
-        environ[key] = value
-    
-    response_data = []
-    
-    def start_response(status, response_headers, exc_info=None):
-        response_data.append(status)
-        response_data.append(response_headers)
-    
-    result = app(environ, start_response)
-    response_body = b''.join(result).decode('utf-8')
-    
-    status_code = int(response_data[0].split(' ')[0])
-    headers = dict(response_data[1])
-    
-    return {
-        'statusCode': status_code,
-        'headers': headers,
-        'body': response_body,
-        'isBase64Encoded': False
-    }
+@app.route('/takes-a-lot-of-balls.mp3')
+def serve_audio():
+    return '', 404
+    return send_from_directory('static', 'takes-a-lot-of-balls.mp3')
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def catch_all(path):
+    return '', 404
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
